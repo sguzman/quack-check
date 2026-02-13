@@ -4,22 +4,16 @@ import re
 import sys
 from pathlib import Path
 
+PdfReader = None
 try:
     from pypdf import PdfReader
-except Exception as e:
-    print(
-        json.dumps(
-            {
-                "page_count": 0,
-                "sampled_pages": 0,
-                "avg_chars_per_page": 0,
-                "garbage_ratio": 1.0,
-                "whitespace_ratio": 1.0,
-                "error": f"missing pypdf import: {e}",
-            }
-        )
-    )
-    sys.exit(0)
+except Exception:
+    PdfReader = None
+
+try:
+    import pypdfium2 as pdfium
+except Exception:
+    pdfium = None
 
 GARBAGE_RE = re.compile(r"[\uFFFD]")
 
@@ -29,9 +23,45 @@ def main() -> None:
     input_pdf = Path(req["input_pdf"])
     sample_pages = int(req.get("sample_pages", 12))
 
-    try:
-        reader = PdfReader(str(input_pdf))
-    except Exception as e:
+    reader = None
+    doc = None
+    if PdfReader is not None:
+        try:
+            reader = PdfReader(str(input_pdf))
+        except Exception as e:
+            print(
+                json.dumps(
+                    {
+                        "page_count": 0,
+                        "sampled_pages": 0,
+                        "avg_chars_per_page": 0,
+                        "garbage_ratio": 1.0,
+                        "whitespace_ratio": 1.0,
+                        "error": f"failed to read pdf: {e}",
+                    }
+                )
+            )
+            return
+        n_pages = len(reader.pages)
+    elif pdfium is not None:
+        try:
+            doc = pdfium.PdfDocument(str(input_pdf))
+        except Exception as e:
+            print(
+                json.dumps(
+                    {
+                        "page_count": 0,
+                        "sampled_pages": 0,
+                        "avg_chars_per_page": 0,
+                        "garbage_ratio": 1.0,
+                        "whitespace_ratio": 1.0,
+                        "error": f"failed to read pdf via pypdfium2: {e}",
+                    }
+                )
+            )
+            return
+        n_pages = len(doc)
+    else:
         print(
             json.dumps(
                 {
@@ -40,13 +70,11 @@ def main() -> None:
                     "avg_chars_per_page": 0,
                     "garbage_ratio": 1.0,
                     "whitespace_ratio": 1.0,
-                    "error": f"failed to read pdf: {e}",
+                    "error": "missing pypdf and pypdfium2 imports",
                 }
             )
         )
         return
-
-    n_pages = len(reader.pages)
     if n_pages == 0:
         out = dict(
             page_count=0,
@@ -71,7 +99,14 @@ def main() -> None:
     total_garbage = 0
 
     for i in idxs:
-        txt = reader.pages[i].extract_text() or ""
+        if reader is not None:
+            txt = reader.pages[i].extract_text() or ""
+        else:
+            page = doc[i]
+            text_page = page.get_textpage()
+            txt = text_page.get_text_range() or ""
+            text_page.close()
+            page.close()
         total_chars += len(txt)
         total_ws += sum(1 for c in txt if c.isspace())
         total_garbage += len(GARBAGE_RE.findall(txt))
@@ -88,6 +123,8 @@ def main() -> None:
         whitespace_ratio=whitespace_ratio,
     )
     print(json.dumps(out))
+    if doc is not None:
+        doc.close()
 
 
 if __name__ == "__main__":

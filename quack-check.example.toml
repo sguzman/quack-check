@@ -107,13 +107,20 @@ fix_hyphenation = true
 light_markdown = false
 
 [docling]
-python_exe = "python3"
+# Python executable for docling. Use:
+# - "auto" to resolve in order:
+#   1) $DOCLING_PYTHON (if set)
+#   2) ~/Code/AI/docling/.venv/bin/python
+#   3) python3 on PATH
+python_exe = "auto"
 # Hard limits passed to DocumentConverter.convert
 max_num_pages = 1000
 max_file_size_bytes = 500000000
 raises_on_error = false
 # If true, run per-chunk in a separate process (default).
 process_isolation = true
+# Timeout for `quack-check doctor` (seconds).
+doctor_timeout_seconds = 120
 # Per-chunk wall clock timeout.
 chunk_timeout_seconds = 600
 

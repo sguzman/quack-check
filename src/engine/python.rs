@@ -10,6 +10,7 @@ use tracing::{debug, warn};
 pub struct PythonEngine {
     cfg: Config,
     scripts_dir: PathBuf,
+    python_exe: PathBuf,
 }
 
 impl PythonEngine {
@@ -38,9 +39,11 @@ impl PythonEngine {
                 return Err(anyhow!("missing script: {}", path.display()));
             }
         }
+        let python_exe = resolve_python_exe(&cfg.docling.python_exe)?;
         Ok(Self {
             cfg: cfg.clone(),
             scripts_dir,
+            python_exe,
         })
     }
 
@@ -60,7 +63,7 @@ impl PythonEngine {
             script.display(),
             timeout_seconds
         );
-        let mut cmd = Command::new(&self.cfg.docling.python_exe);
+        let mut cmd = Command::new(&self.python_exe);
         cmd.arg(script);
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
@@ -78,10 +81,11 @@ impl PythonEngine {
             .with_context(|| format!("spawning python: {}", script.display()))?;
 
         {
-            let stdin = child.stdin.as_mut().ok_or_else(|| anyhow!("no stdin"))?;
+            let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("no stdin"))?;
             let bytes = serde_json::to_vec(input)?;
             use std::io::Write;
             stdin.write_all(&bytes)?;
+            stdin.flush().ok();
         }
 
         let output = if let Some(secs) = timeout_seconds {
@@ -112,13 +116,40 @@ impl PythonEngine {
     }
 }
 
+fn resolve_python_exe(raw: &str) -> Result<PathBuf> {
+    let raw = raw.trim();
+    if raw.is_empty() || raw.eq_ignore_ascii_case("auto") {
+        if let Ok(env_val) = std::env::var("DOCLING_PYTHON") {
+            let p = expand_tilde(&env_val);
+            if p.exists() {
+                return Ok(p);
+            }
+        }
+        let default_path = expand_tilde("~/Code/AI/docling/.venv/bin/python");
+        if default_path.exists() {
+            return Ok(default_path);
+        }
+        return Ok(PathBuf::from("python3"));
+    }
+    let p = expand_tilde(raw);
+    Ok(p)
+}
+
+fn expand_tilde(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
 impl Engine for PythonEngine {
     fn doctor(&self) -> Result<DocDiag> {
         let script = self.script("docling_runner.py");
         self.run_json::<serde_json::Value, DocDiag>(
             &script,
             &serde_json::json!({"cmd":"doctor"}),
-            Some(30),
+            Some(self.cfg.docling.doctor_timeout_seconds),
             &[],
         )
     }

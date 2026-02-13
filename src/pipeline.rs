@@ -77,7 +77,19 @@ impl<E: Engine> Pipeline<E> {
         let chunks_dir = job_dir.join("chunks");
         ensure_dir(&chunks_dir)?;
 
-        let chunk_inputs = self.prepare_chunks(input, &plan, &chunks_dir)?;
+        let chunk_inputs = match self.prepare_chunks(input, &plan, &chunks_dir) {
+            Ok(inputs) => inputs,
+            Err(err) => {
+                if self.cfg.chunking.strategy == "physical_split" {
+                    warn!("physical split failed; falling back to page_range: {err}");
+                    let mut fallback = plan.clone();
+                    fallback.strategy = "page_range".to_string();
+                    self.prepare_chunks(input, &fallback, &chunks_dir)?
+                } else {
+                    return Err(err);
+                }
+            }
+        };
 
         let mut chunk_reports = Vec::new();
         let mut markdown_parts = Vec::new();
@@ -111,15 +123,36 @@ impl<E: Engine> Pipeline<E> {
                 use_page_range: ch.use_page_range,
             };
 
-            let out = match decision.chosen_engine.as_str() {
+            let mut used_fallback = false;
+            let mut out = match decision.chosen_engine.as_str() {
                 "docling" => self.engine.convert_docling(&req),
                 "native_text" => self.engine.convert_native_text(&req),
                 other => Err(anyhow!("unknown engine: {other}")),
+            };
+
+            if matches!(decision.chosen_engine.as_str(), "native_text") {
+                let needs_fallback = match &out {
+                    Ok(o) => !o.ok
+                        || o.warnings.iter().any(|w| w.contains("missing pypdf import")),
+                    Err(e) => e.to_string().contains("missing pypdf import"),
+                };
+
+                if needs_fallback {
+                    warn!("native_text failed; falling back to docling for chunk {}", i);
+                    out = self.engine.convert_docling(&req);
+                    used_fallback = true;
+                }
             }
-            .with_context(|| format!("convert failed for chunk {}", i))?;
+
+            let mut out = out.with_context(|| format!("convert failed for chunk {}", i))?;
 
             if !out.ok {
                 return Err(anyhow!("chunk {} failed; warnings={:?}", i, out.warnings));
+            }
+
+            if used_fallback {
+                out.warnings
+                    .push("native_text failed; fell back to docling".to_string());
             }
 
             if self.cfg.output.write_chunk_json {

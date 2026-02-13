@@ -238,6 +238,7 @@ pub struct Docling {
     pub max_file_size_bytes: u64,
     pub raises_on_error: bool,
     pub process_isolation: bool,
+    pub doctor_timeout_seconds: u64,
     pub chunk_timeout_seconds: u64,
     #[serde(default)]
     pub env: std::collections::BTreeMap<String, String>,
@@ -255,11 +256,12 @@ pub struct Docling {
 impl Default for Docling {
     fn default() -> Self {
         Self {
-            python_exe: "python3".into(),
+            python_exe: "auto".into(),
             max_num_pages: 1000,
             max_file_size_bytes: 500_000_000,
             raises_on_error: false,
             process_isolation: true,
+            doctor_timeout_seconds: 120,
             chunk_timeout_seconds: 600,
             env: Default::default(),
             backend: Default::default(),

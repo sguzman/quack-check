@@ -28,10 +28,17 @@ quack-check is a deterministic PDF transcript orchestrator built around Docling.
 cargo build --release
 ```
 
-2. Install Python dependencies in your Python environment:
+2. Use your existing Docling environment (recommended). quack-check looks for:
+   1) `$DOCLING_PYTHON`
+   2) `~/Code/AI/docling/.venv/bin/python`
+   3) `python3` on PATH
+
+If you want to point to a specific environment, set `docling.python_exe` in `quack-check.toml`.
+
+If you need to install dependencies in a separate venv, do it there (not globally):
 
 ```bash
-python3 -m pip install docling pypdf
+/path/to/venv/bin/python -m pip install docling pypdf
 ```
 
 **Quick Start**
