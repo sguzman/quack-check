@@ -1,2 +1,10 @@
 /target
 tmp
+out
+.quack-check-work
+.quack-check-cache
+.docling-artifacts
+quack-check.toml
+*.log
+__pycache__/
+*.pyc

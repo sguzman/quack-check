@@ -1,0 +1,237 @@
+# quack-check.example.toml
+#
+# This file is intentionally verbose: every knob that affects quality,
+# determinism, memory, and fallback behavior should live here.
+#
+# quack-check rules:
+# - Config drives behavior. Code should not hide policy decisions.
+# - Defaults must be safe and deterministic.
+# - All timeouts are per-chunk unless explicitly stated.
+
+[global]
+job_name = "default"
+# If true, refuse to access network sources (URLs). Recommended for determinism.
+offline_only = true
+# If true, keep all intermediate artifacts for debugging/auditing.
+keep_intermediates = true
+# If true, resume a previous job if the same job-id exists.
+resume = true
+# Max parallel chunks. Set to 1 for maximum stability on memory-heavy corpora.
+max_parallel_chunks = 1
+# If true, write a stable "run summary" to stdout in addition to logs.
+print_summary = true
+
+[paths]
+# Root output directory for jobs.
+out_dir = "out"
+# Working directory for temp files (splits, caches).
+work_dir = ".quack-check-work"
+# Where to store persistent caches (digests, chunk outputs).
+cache_dir = ".quack-check-cache"
+# Where Docling model artifacts should live. Also exported via env var.
+docling_artifacts_dir = ".docling-artifacts"
+# Python scripts directory (repo-local).
+scripts_dir = "scripts"
+
+[hashing]
+# How to hash the input PDF for job-id:
+# - "full_sha256": hash entire file
+# - "fast_2x16mb": hash first 16MB + last 16MB + file size
+mode = "fast_2x16mb"
+fast_window_bytes = 16777216
+
+[limits]
+# Hard safety limits before we even attempt conversion.
+max_input_file_bytes = 2147483648        # 2 GiB
+max_input_pages = 20000
+# If a PDF exceeds these, we require chunking/splitting.
+require_chunking_over_pages = 200
+require_chunking_over_bytes = 200000000  # 200 MB
+# Global wall-clock limit for an entire job (0 = disabled).
+job_timeout_seconds = 0
+
+[classification]
+# Number of pages to sample for probe. Sample is spread across document.
+sample_pages = 12
+# If true, also sample rasterization stats (slower). (reserved for future)
+enable_render_probe = false
+
+# Text quality heuristics:
+# If average extracted chars/page is above this, treat as high-quality text.
+min_avg_chars_per_page_for_high_text = 1200
+# If below this, likely a scan (unless pages are empty).
+max_avg_chars_per_page_for_scan = 80
+# If the ratio of replacement/garbage chars is above this, text layer is degraded.
+max_garbage_ratio_for_high_text = 0.02
+# If whitespace dominates, likely layout issues or empty text.
+max_whitespace_ratio_for_high_text = 0.55
+
+# Decision overrides:
+# Force a specific tier regardless of probe (useful for debugging).
+# Allowed: "AUTO", "HIGH_TEXT", "MIXED_TEXT", "SCAN"
+forced_tier = "AUTO"
+
+[chunking]
+# Strategy:
+# - "physical_split": create chunk PDFs and convert each chunk separately (default)
+# - "page_range": rely on Docling page_range (less robust on some pipelines)
+strategy = "physical_split"
+
+# Chunk sizing targets:
+target_pages_per_chunk = 40
+max_pages_per_chunk = 80
+min_pages_per_chunk = 10
+
+# If enabled, we also cap chunk bytes. Requires split step to estimate sizes.
+cap_chunk_bytes = true
+max_chunk_bytes = 50000000  # 50 MB
+
+# Splitter backend:
+# - "python_pypdf" (default)
+split_backend = "python_pypdf"
+# If false, delete temporary chunk PDFs after processing.
+keep_split_pdfs = true
+
+[engine]
+# Per-tier engine selection
+high_text_engine = "native_text"
+mixed_text_engine = "docling"
+scan_engine = "docling"
+
+[native_text]
+# Native text extraction for high-quality PDFs (no OCR)
+backend = "python_pypdf"
+normalize_unicode = true
+collapse_whitespace = true
+fix_hyphenation = true
+light_markdown = false
+
+[docling]
+python_exe = "python3"
+# Hard limits passed to DocumentConverter.convert
+max_num_pages = 1000
+max_file_size_bytes = 500000000
+raises_on_error = false
+# If true, run per-chunk in a separate process (default).
+process_isolation = true
+# Per-chunk wall clock timeout.
+chunk_timeout_seconds = 600
+
+# Optional env vars for docling/python (ex: thread controls)
+[docling.env]
+# OMP_NUM_THREADS = "1"
+
+[docling.backend]
+# PDF backend selection:
+# "AUTO", "PYPDFIUM2", "DLPARSE_V1", "DLPARSE_V2", "DLPARSE_V4"
+pdf_backend = "AUTO"
+
+[docling.pipeline]
+# Core pipeline toggles
+# NOTE: actual options are detected at runtime; unknown flags are logged.
+do_ocr = false
+force_backend_text = false
+
+do_table_structure = true
+do_code_enrichment = false
+do_formula_enrichment = false
+do_picture_description = false
+do_picture_classification = false
+
+# Output artifacts (disable for memory safety)
+generate_page_images = false
+generate_picture_images = false
+generate_table_images = false
+generate_parsed_pages = false
+create_legacy_output = false
+
+# Remote services / plugins
+enable_remote_services = false
+allow_external_plugins = false
+
+# Timeout for docling pipeline itself (seconds; 0 disables)
+document_timeout_seconds = 0
+
+# Threaded pipeline tuning (best-effort; only applied if supported by your docling build)
+use_threaded_pipeline = true
+num_threads = 4
+queue_max_size = 8
+layout_batch_size = 16
+table_batch_size = 8
+picture_batch_size = 4
+page_batch_size = 8
+
+# Rendering scale for internal images (if supported)
+images_scale = 2.0
+
+[docling.ocr]
+# OCR engine: easyocr | tesseract | tesseract_cli
+engine = "easyocr"
+langs = ["en"]
+force_full_page_ocr = false
+bitmap_area_threshold = 0.25
+force_ocr = false
+# Extra args passed to tesseract CLI (if engine=tesseract_cli)
+tesseract_cli_args = ""
+
+[docling.accelerator]
+# Device: AUTO | CPU | CUDA | MPS (depends on your build)
+device = "AUTO"
+# Inference threads (0 = default)
+inference_threads = 0
+use_fp16 = true
+
+[docling.vlm]
+# Reserved for future VLM integrations
+enabled = false
+provider = "local"
+model = ""
+api_key_env = "OPENAI_API_KEY"
+force_backend_text = true
+
+[postprocess]
+normalize_unicode = true
+normalize_newlines = true
+trim_trailing_whitespace = true
+remove_repeated_lines = true
+repeated_line_min_occurrences = 6
+repeated_line_max_length = 120
+remove_by_regex = true
+
+[postprocess.regex]
+patterns = [
+  "^(page\\s+\\d+|\\d+\\s*/\\s*\\d+)$",
+  "^[A-Z0-9\\s\\-]{12,}$",
+]
+
+[output]
+write_markdown = true
+write_text = true
+write_report_json = true
+write_chunk_json = true
+markdown_filename = "transcript.md"
+text_filename = "transcript.txt"
+report_filename = "report.json"
+write_index_json = true
+
+[logging]
+# Log level: trace|debug|info|warn|error
+level = "info"
+# JSON logs for machine ingestion
+json = false
+# If true, also write logs to a file
+write_to_file = true
+# Optional file path. If empty, quack-check writes to out/quack-check.log or job_dir/logs.
+file_path = ""
+
+[debug]
+# If true, keep per-chunk python stderr even on success.
+keep_python_stderr = true
+# If true, dump the effective resolved config into the job folder.
+dump_effective_config = true
+
+[security]
+# If offline_only=true, block URL inputs even if user passes them.
+reject_url_inputs = true
+# If true, refuse to run if scripts are not from the expected repo path.
+pin_scripts_dir = true

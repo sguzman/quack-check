@@ -1,0 +1,59 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocDiag {
+    pub python_exe: String,
+    pub python_version: String,
+    pub docling_version: Option<String>,
+    pub ok: bool,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbeOut {
+    pub page_count: u32,
+    pub sampled_pages: u32,
+    pub avg_chars_per_page: u32,
+    pub garbage_ratio: f32,
+    pub whitespace_ratio: f32,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConvertIn {
+    pub input_pdf: String,
+    pub out_dir: String,
+    pub chunk_index: u32,
+    pub start_page: u32,
+    pub end_page: u32,
+    pub do_ocr: bool,
+    pub pdf_backend: String,
+    pub use_page_range: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConvertOut {
+    pub ok: bool,
+    pub markdown: String,
+    pub warnings: Vec<String>,
+    pub meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplitChunk {
+    pub chunk_index: u32,
+    pub start_page: u32,
+    pub end_page: u32,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplitOut {
+    pub ok: bool,
+    #[serde(default)]
+    pub outputs: Vec<SplitChunk>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
