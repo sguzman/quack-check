@@ -151,50 +151,7 @@ fn resolve_artifacts_dir(cfg: &Config) -> Option<PathBuf> {
     if !cfg.paths.docling_artifacts_dir.is_empty() {
         return Some(PathBuf::from(&cfg.paths.docling_artifacts_dir));
     }
-    if let Ok(hf_home) = std::env::var("HF_HOME") {
-        if !hf_home.trim().is_empty() {
-            if let Some(dir) = find_docling_artifacts_in_hf(&PathBuf::from(&hf_home)) {
-                return Some(dir);
-            }
-            return Some(PathBuf::from(hf_home));
-        }
-    }
     None
-}
-
-fn find_docling_artifacts_in_hf(hf_home: &Path) -> Option<PathBuf> {
-    let hub = hf_home.join("hub");
-    let candidates = [
-        "models--docling-project--docling-layout-heron",
-        "models--docling-project--docling-models",
-        "models--ds4sd--docling-models",
-        "models--ds4sd--docling-layout-old",
-    ];
-
-    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
-    for name in candidates {
-        let base = hub.join(name).join("snapshots");
-        let entries = match std::fs::read_dir(&base) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let model_path = path.join("model.safetensors");
-            if !model_path.exists() {
-                continue;
-            }
-            let mtime = model_path
-                .metadata()
-                .and_then(|m| m.modified())
-                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-            match &best {
-                Some((best_time, _)) if *best_time >= mtime => {}
-                _ => best = Some((mtime, path.clone())),
-            }
-        }
-    }
-    best.map(|(_, p)| p)
 }
 impl Engine for PythonEngine {
     fn doctor(&self) -> Result<DocDiag> {
@@ -282,18 +239,58 @@ impl Engine for PythonEngine {
 }
 
 fn wait_with_timeout(child: &mut Child, timeout: Duration) -> Result<Output> {
+    // Drain pipes while waiting so verbose python logging can't deadlock the child
+    // on a full stdout/stderr buffer.
+    let stdout_reader = child.stdout.take();
+    let stderr_reader = child.stderr.take();
+
+    let stdout_thread = std::thread::spawn(move || -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        if let Some(mut out) = stdout_reader {
+            out.read_to_end(&mut buf).with_context(|| "read stdout")?;
+        }
+        Ok(buf)
+    });
+
+    let stderr_thread = std::thread::spawn(move || -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        if let Some(mut err) = stderr_reader {
+            err.read_to_end(&mut buf).with_context(|| "read stderr")?;
+        }
+        Ok(buf)
+    });
+
     let start = Instant::now();
     loop {
         if let Some(status) = child.try_wait().with_context(|| "try_wait")? {
-            let output = collect_output(child, status)?;
-            return Ok(output);
+            let stdout = stdout_thread
+                .join()
+                .map_err(|_| anyhow!("stdout reader thread panicked"))??;
+            let stderr = stderr_thread
+                .join()
+                .map_err(|_| anyhow!("stderr reader thread panicked"))??;
+            return Ok(Output {
+                status,
+                stdout,
+                stderr,
+            });
         }
 
         if start.elapsed() > timeout {
             warn!("python process timed out after {:?}", timeout);
             let _ = child.kill();
             let status = child.wait().with_context(|| "wait after kill")?;
-            let output = collect_output(child, status)?;
+            let stdout = stdout_thread
+                .join()
+                .map_err(|_| anyhow!("stdout reader thread panicked"))??;
+            let stderr = stderr_thread
+                .join()
+                .map_err(|_| anyhow!("stderr reader thread panicked"))??;
+            let output = Output {
+                status,
+                stdout,
+                stderr,
+            };
             return Err(anyhow!(
                 "python process exceeded timeout ({:?}); stderr: {}",
                 timeout,
@@ -303,25 +300,4 @@ fn wait_with_timeout(child: &mut Child, timeout: Duration) -> Result<Output> {
 
         std::thread::sleep(Duration::from_millis(50));
     }
-}
-
-fn collect_output(child: &mut Child, status: std::process::ExitStatus) -> Result<Output> {
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-
-    if let Some(mut out) = child.stdout.take() {
-        out.read_to_end(&mut stdout)
-            .with_context(|| "read stdout")?;
-    }
-
-    if let Some(mut err) = child.stderr.take() {
-        err.read_to_end(&mut stderr)
-            .with_context(|| "read stderr")?;
-    }
-
-    Ok(Output {
-        status,
-        stdout,
-        stderr,
-    })
 }

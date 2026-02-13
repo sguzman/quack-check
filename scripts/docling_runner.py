@@ -23,7 +23,7 @@ def doctor():
     except Exception as e:
         out["ok"] = False
         out["error"] = str(e)
-    print(json.dumps(out))
+    return out
 
 
 def set_if_present(obj, name, value, applied, ignored):
@@ -70,6 +70,24 @@ def resolve_backend_class(name: str):
             continue
 
     return None
+
+
+def normalize_ocr_langs(engine: str, langs):
+    if not isinstance(langs, list):
+        return langs
+    if engine not in ("tesseract", "tesseract_cli"):
+        return langs
+
+    # Tesseract language packs typically use ISO-639-2 codes, e.g. "eng".
+    map2 = {
+        "en": "eng",
+    }
+    out = []
+    for lang in langs:
+        if not isinstance(lang, str):
+            continue
+        out.append(map2.get(lang.lower(), lang))
+    return out or langs
 
 
 def build_pipeline_options(cfg: dict, do_ocr: bool):
@@ -177,13 +195,15 @@ def build_pipeline_options(cfg: dict, do_ocr: bool):
 
     set_if_present(pipeline_options, "enable_remote_services", enable_remote, applied, ignored)
     set_if_present(pipeline_options, "allow_external_plugins", allow_plugins, applied, ignored)
-    set_if_present(
-        pipeline_options,
-        "document_timeout",
-        int(pipeline_cfg.get("document_timeout_seconds", 0)),
-        applied,
-        ignored,
-    )
+    document_timeout = int(pipeline_cfg.get("document_timeout_seconds", 0))
+    if document_timeout > 0:
+        set_if_present(
+            pipeline_options,
+            "document_timeout",
+            document_timeout,
+            applied,
+            ignored,
+        )
 
     images_scale = pipeline_cfg.get("images_scale", None)
     if images_scale is not None:
@@ -253,6 +273,8 @@ def build_pipeline_options(cfg: dict, do_ocr: bool):
 
         ocr_obj = None
         engine = ocr_cfg.get("engine", "rapidocr")
+        langs = normalize_ocr_langs(engine, ocr_cfg.get("langs", []))
+
         if engine == "tesseract_cli" and TesseractCliOcrOptions:
             ocr_obj = TesseractCliOcrOptions()
         elif engine == "tesseract" and TesseractOcrOptions:
@@ -268,7 +290,7 @@ def build_pipeline_options(cfg: dict, do_ocr: bool):
             ocr_obj = None
 
         if ocr_obj is not None:
-            set_if_present(ocr_obj, "lang", ocr_cfg.get("langs", []), applied, ignored)
+            set_if_present(ocr_obj, "lang", langs, applied, ignored)
             set_if_present(
                 ocr_obj,
                 "bitmap_area_threshold",
@@ -432,21 +454,31 @@ def convert(req, cfg):
         warnings.append(f"export failed: {e}")
 
     out = {"ok": ok, "markdown": md, "warnings": warnings, "meta": meta}
-    print(json.dumps(out))
+    return out
+
+
+def emit_and_exit(payload, code=0):
+    # Avoid Python 3.14 multiprocessing teardown hangs by exiting immediately
+    # after flushing the JSON response that Rust expects on stdout.
+    sys.stdout.write(json.dumps(payload))
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    os._exit(code)
 
 
 def main():
-    payload = json.loads(sys.stdin.read().strip() or "{}")
-    cmd = payload.get("cmd")
+    try:
+        payload = json.loads(sys.stdin.read().strip() or "{}")
+        cmd = payload.get("cmd")
 
-    if cmd == "doctor":
-        doctor()
-        return
-    if cmd == "convert":
-        convert(payload.get("req", {}), payload.get("cfg", {}))
-        return
+        if cmd == "doctor":
+            emit_and_exit(doctor(), 0)
+        if cmd == "convert":
+            emit_and_exit(convert(payload.get("req", {}), payload.get("cfg", {})), 0)
 
-    print(json.dumps({"ok": False, "error": f"unknown cmd: {cmd}"}))
+        emit_and_exit({"ok": False, "error": f"unknown cmd: {cmd}"}, 1)
+    except Exception as e:
+        emit_and_exit({"ok": False, "error": str(e)}, 1)
 
 
 if __name__ == "__main__":

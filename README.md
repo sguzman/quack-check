@@ -74,7 +74,8 @@ Highlights:
 - `chunking.*` controls page chunk size and strategy (`physical_split` vs `page_range`).
 - `docling.pipeline.*` sets docling flags (OCR, force_backend_text, images_scale, thread/batch sizes).
 - `docling.ocr.*` selects engine and OCR behavior.
-- `paths.docling_artifacts_dir` controls where Docling looks for model artifacts. If empty, `$HF_HOME` is used and we try to locate docling models under `$HF_HOME/hub`.
+  - For `tesseract`/`tesseract_cli`, use Tesseract language codes such as `eng`.
+- `paths.docling_artifacts_dir` controls where Docling looks for model artifacts. If empty, `DOCLING_ARTIFACTS_PATH` is not set and Docling resolves models through `HF_HOME`/its Hugging Face cache behavior.
 - `postprocess.*` cleans repeated headers/footers and regex-matched lines.
 - `output.*` controls what artifacts are written.
 - `logging.*` controls log level and file logging.

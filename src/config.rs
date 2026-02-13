@@ -354,7 +354,7 @@ impl Default for DoclingOcr {
     fn default() -> Self {
         Self {
             engine: "tesseract_cli".into(),
-            langs: vec!["en".into()],
+            langs: vec!["eng".into()],
             force_full_page_ocr: false,
             bitmap_area_threshold: 0.25,
             force_ocr: false,
