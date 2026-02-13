@@ -28,8 +28,8 @@ out_dir = "out"
 work_dir = ".quack-check-work"
 # Where to store persistent caches (digests, chunk outputs).
 cache_dir = ".quack-check-cache"
-# Where Docling model artifacts should live. Also exported via env var.
-docling_artifacts_dir = ".docling-artifacts"
+# Where Docling model artifacts should live. If empty, uses $HF_HOME.
+docling_artifacts_dir = ""
 # Python scripts directory (repo-local).
 scripts_dir = "scripts"
 

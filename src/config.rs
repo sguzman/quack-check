@@ -105,7 +105,7 @@ impl Default for Paths {
             out_dir: "out".into(),
             work_dir: ".quack-check-work".into(),
             cache_dir: ".quack-check-cache".into(),
-            docling_artifacts_dir: ".docling-artifacts".into(),
+            docling_artifacts_dir: "".into(),
             scripts_dir: "scripts".into(),
         }
     }

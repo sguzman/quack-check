@@ -74,6 +74,7 @@ Highlights:
 - `chunking.*` controls page chunk size and strategy (`physical_split` vs `page_range`).
 - `docling.pipeline.*` sets docling flags (OCR, force_backend_text, images_scale, thread/batch sizes).
 - `docling.ocr.*` selects engine and OCR behavior.
+- `paths.docling_artifacts_dir` controls where Docling looks for model artifacts. If empty, `$HF_HOME` is used.
 - `postprocess.*` cleans repeated headers/footers and regex-matched lines.
 - `output.*` controls what artifacts are written.
 - `logging.*` controls log level and file logging.

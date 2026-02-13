@@ -75,6 +75,9 @@ impl PythonEngine {
         for (k, v) in extra_env {
             cmd.env(k, v);
         }
+        if let Some(artifacts_dir) = resolve_artifacts_dir(&self.cfg) {
+            cmd.env("DOCLING_ARTIFACTS_PATH", artifacts_dir);
+        }
 
         let mut child = cmd
             .spawn()
@@ -142,6 +145,18 @@ fn expand_tilde(path: &str) -> PathBuf {
         }
     }
     PathBuf::from(path)
+}
+
+fn resolve_artifacts_dir(cfg: &Config) -> Option<PathBuf> {
+    if !cfg.paths.docling_artifacts_dir.is_empty() {
+        return Some(PathBuf::from(&cfg.paths.docling_artifacts_dir));
+    }
+    if let Ok(hf_home) = std::env::var("HF_HOME") {
+        if !hf_home.trim().is_empty() {
+            return Some(PathBuf::from(hf_home));
+        }
+    }
+    None
 }
 impl Engine for PythonEngine {
     fn doctor(&self) -> Result<DocDiag> {
