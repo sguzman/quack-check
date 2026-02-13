@@ -28,7 +28,8 @@ out_dir = "out"
 work_dir = ".quack-check-work"
 # Where to store persistent caches (digests, chunk outputs).
 cache_dir = ".quack-check-cache"
-# Where Docling model artifacts should live. If empty, uses $HF_HOME.
+# Where Docling model artifacts should live. If empty, uses $HF_HOME and will
+# try to locate docling models under $HF_HOME/hub.
 docling_artifacts_dir = ""
 # Python scripts directory (repo-local).
 scripts_dir = "scripts"
@@ -172,8 +173,8 @@ page_batch_size = 8
 images_scale = 2.0
 
 [docling.ocr]
-# OCR engine: easyocr | tesseract | tesseract_cli
-engine = "easyocr"
+# OCR engine: tesseract_cli | tesseract | rapidocr | easyocr
+engine = "tesseract_cli"
 langs = ["en"]
 force_full_page_ocr = false
 bitmap_area_threshold = 0.25

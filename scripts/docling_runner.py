@@ -103,13 +103,8 @@ def build_pipeline_options(cfg: dict, do_ocr: bool):
         applied,
         ignored,
     )
-    set_if_present(
-        pipeline_options,
-        "do_table_structure",
-        pipeline_cfg.get("do_table_structure", True),
-        applied,
-        ignored,
-    )
+    do_table = pipeline_cfg.get("do_table_structure", True)
+    set_if_present(pipeline_options, "do_table_structure", do_table, applied, ignored)
     set_if_present(
         pipeline_options,
         "do_code_enrichment",
@@ -244,22 +239,33 @@ def build_pipeline_options(cfg: dict, do_ocr: bool):
         try:
             from docling.datamodel.pipeline_options import (
                 EasyOcrOptions,
+                RapidOcrOptions,
+                OcrAutoOptions,
                 TesseractCliOcrOptions,
                 TesseractOcrOptions,
             )
         except Exception:
             EasyOcrOptions = None
+            RapidOcrOptions = None
+            OcrAutoOptions = None
             TesseractCliOcrOptions = None
             TesseractOcrOptions = None
 
         ocr_obj = None
-        engine = ocr_cfg.get("engine", "easyocr")
+        engine = ocr_cfg.get("engine", "rapidocr")
         if engine == "tesseract_cli" and TesseractCliOcrOptions:
             ocr_obj = TesseractCliOcrOptions()
         elif engine == "tesseract" and TesseractOcrOptions:
             ocr_obj = TesseractOcrOptions()
+        elif engine == "rapidocr" and RapidOcrOptions:
+            ocr_obj = RapidOcrOptions()
+        elif engine == "auto" and OcrAutoOptions:
+            ocr_obj = OcrAutoOptions()
         elif EasyOcrOptions:
             ocr_obj = EasyOcrOptions()
+        else:
+            # Fall back to rapidocr if available in the docling build (handled internally).
+            ocr_obj = None
 
         if ocr_obj is not None:
             set_if_present(ocr_obj, "lang", ocr_cfg.get("langs", []), applied, ignored)
@@ -319,7 +325,35 @@ def build_pipeline_options(cfg: dict, do_ocr: bool):
     if artifacts_path:
         set_if_present(pipeline_options, "artifacts_path", artifacts_path, applied, ignored)
 
+    # If tableformer artifacts are missing, disable table structure to avoid hard failure.
+    if do_table:
+        hf_home = os.environ.get("HF_HOME")
+        if not has_tableformer_artifacts(artifacts_path, hf_home):
+            set_if_present(pipeline_options, "do_table_structure", False, applied, ignored)
+            ignored.append("do_table_structure (missing tableformer artifacts)")
+
     return pipeline_options, applied, ignored
+
+
+def has_tableformer_artifacts(artifacts_path: str | None, hf_home: str | None) -> bool:
+    candidates = []
+    if artifacts_path:
+        candidates.append(Path(artifacts_path))
+    if hf_home:
+        candidates.append(Path(hf_home) / "hub")
+
+    for base in candidates:
+        # direct layout
+        if (base / "accurate" / "tm_config.json").exists():
+            return True
+        if (base / "fast" / "tm_config.json").exists():
+            return True
+        # docling-models layout
+        if (base / "model_artifacts" / "tableformer" / "accurate" / "tm_config.json").exists():
+            return True
+        if (base / "model_artifacts" / "tableformer" / "fast" / "tm_config.json").exists():
+            return True
+    return False
 
 
 def convert(req, cfg):

@@ -353,7 +353,7 @@ pub struct DoclingOcr {
 impl Default for DoclingOcr {
     fn default() -> Self {
         Self {
-            engine: "easyocr".into(),
+            engine: "tesseract_cli".into(),
             langs: vec!["en".into()],
             force_full_page_ocr: false,
             bitmap_area_threshold: 0.25,

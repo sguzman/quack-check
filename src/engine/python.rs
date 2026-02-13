@@ -153,10 +153,48 @@ fn resolve_artifacts_dir(cfg: &Config) -> Option<PathBuf> {
     }
     if let Ok(hf_home) = std::env::var("HF_HOME") {
         if !hf_home.trim().is_empty() {
+            if let Some(dir) = find_docling_artifacts_in_hf(&PathBuf::from(&hf_home)) {
+                return Some(dir);
+            }
             return Some(PathBuf::from(hf_home));
         }
     }
     None
+}
+
+fn find_docling_artifacts_in_hf(hf_home: &Path) -> Option<PathBuf> {
+    let hub = hf_home.join("hub");
+    let candidates = [
+        "models--docling-project--docling-layout-heron",
+        "models--docling-project--docling-models",
+        "models--ds4sd--docling-models",
+        "models--ds4sd--docling-layout-old",
+    ];
+
+    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
+    for name in candidates {
+        let base = hub.join(name).join("snapshots");
+        let entries = match std::fs::read_dir(&base) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let model_path = path.join("model.safetensors");
+            if !model_path.exists() {
+                continue;
+            }
+            let mtime = model_path
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            match &best {
+                Some((best_time, _)) if *best_time >= mtime => {}
+                _ => best = Some((mtime, path.clone())),
+            }
+        }
+    }
+    best.map(|(_, p)| p)
 }
 impl Engine for PythonEngine {
     fn doctor(&self) -> Result<DocDiag> {
