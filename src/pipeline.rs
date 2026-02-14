@@ -199,7 +199,8 @@ impl<E: Engine> Pipeline<E> {
         plan: &ChunkPlan,
         chunks_dir: &Path,
     ) -> Result<Vec<ChunkInput>> {
-        let strategy = self.cfg.chunking.strategy.as_str();
+        // Use the plan's strategy so callers can switch strategies for fallback.
+        let strategy = plan.strategy.as_str();
         if strategy == "physical_split" && plan.chunks.len() > 1 {
             let split_outputs = self
                 .engine
