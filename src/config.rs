@@ -431,7 +431,7 @@ impl Default for Postprocess {
 
 fn default_control_chars_to_sanitize() -> Vec<u8> {
     let mut out: Vec<u8> = (0u8..=31u8).collect();
-    out.push(127u8);
+    out.extend(127u8..=159u8);
     out
 }
 

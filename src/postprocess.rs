@@ -41,7 +41,7 @@ fn sanitize_control_chars(s: &str, codes: &[u8]) -> String {
         return s.to_string();
     }
 
-    let mut mask = [false; 128];
+    let mut mask = [false; 256];
     for &code in codes {
         if (code as usize) < mask.len() {
             mask[code as usize] = true;
@@ -55,7 +55,7 @@ fn sanitize_control_chars(s: &str, codes: &[u8]) -> String {
                 return true;
             }
             let cp = ch as u32;
-            if cp < 128 {
+            if cp < 256 {
                 !mask[cp as usize]
             } else {
                 true

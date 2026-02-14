@@ -19,10 +19,11 @@ fn removes_repeated_lines() {
 #[test]
 fn sanitizes_control_chars() {
     let cfg = Config::default();
-    let parts = vec!["Alpha\u{0002}Beta\nLine\tTabbed\r\nNext".to_string()];
+    let parts = vec!["Alpha\u{0002}Beta\u{0084}\nLine\tTabbed\r\nNext".to_string()];
     let merged = merge_markdown(&cfg, parts).unwrap();
 
     assert!(!merged.contains('\u{0002}'));
+    assert!(!merged.contains('\u{0084}'));
     assert!(merged.contains("AlphaBeta"));
     assert!(merged.contains('\n'));
     assert!(merged.contains('\t'));
