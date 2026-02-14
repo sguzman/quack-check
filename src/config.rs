@@ -403,6 +403,8 @@ impl Default for DoclingVlm {
 pub struct Postprocess {
     pub normalize_unicode: bool,
     pub normalize_newlines: bool,
+    #[serde(default = "default_control_chars_to_sanitize")]
+    pub control_chars_to_sanitize: Vec<u8>,
     pub trim_trailing_whitespace: bool,
     pub remove_repeated_lines: bool,
     pub repeated_line_min_occurrences: u32,
@@ -416,6 +418,7 @@ impl Default for Postprocess {
         Self {
             normalize_unicode: true,
             normalize_newlines: true,
+            control_chars_to_sanitize: default_control_chars_to_sanitize(),
             trim_trailing_whitespace: true,
             remove_repeated_lines: true,
             repeated_line_min_occurrences: 6,
@@ -424,6 +427,12 @@ impl Default for Postprocess {
             regex: Default::default(),
         }
     }
+}
+
+fn default_control_chars_to_sanitize() -> Vec<u8> {
+    let mut out: Vec<u8> = (0u8..=31u8).collect();
+    out.push(127u8);
+    out
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

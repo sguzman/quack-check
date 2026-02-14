@@ -15,6 +15,8 @@ pub fn merge_markdown(cfg: &Config, parts: Vec<String>) -> Result<String> {
         merged = merged.nfkc().collect::<String>();
     }
 
+    merged = sanitize_control_chars(&merged, &cfg.postprocess.control_chars_to_sanitize);
+
     if cfg.postprocess.trim_trailing_whitespace {
         merged = merged
             .lines()
@@ -32,6 +34,34 @@ pub fn merge_markdown(cfg: &Config, parts: Vec<String>) -> Result<String> {
     }
 
     Ok(merged)
+}
+
+fn sanitize_control_chars(s: &str, codes: &[u8]) -> String {
+    if codes.is_empty() {
+        return s.to_string();
+    }
+
+    let mut mask = [false; 128];
+    for &code in codes {
+        if (code as usize) < mask.len() {
+            mask[code as usize] = true;
+        }
+    }
+
+    s.chars()
+        .filter(|&ch| {
+            // Preserve structural whitespace controls to avoid flattening documents.
+            if ch == '\n' || ch == '\r' || ch == '\t' {
+                return true;
+            }
+            let cp = ch as u32;
+            if cp < 128 {
+                !mask[cp as usize]
+            } else {
+                true
+            }
+        })
+        .collect()
 }
 
 fn remove_repeated_lines(cfg: &Config, s: &str) -> String {

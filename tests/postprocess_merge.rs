@@ -15,3 +15,15 @@ fn removes_repeated_lines() {
     let merged = merge_markdown(&cfg, parts).unwrap();
     assert!(!merged.contains("BOOK TITLE"));
 }
+
+#[test]
+fn sanitizes_control_chars() {
+    let cfg = Config::default();
+    let parts = vec!["Alpha\u{0002}Beta\nLine\tTabbed\r\nNext".to_string()];
+    let merged = merge_markdown(&cfg, parts).unwrap();
+
+    assert!(!merged.contains('\u{0002}'));
+    assert!(merged.contains("AlphaBeta"));
+    assert!(merged.contains('\n'));
+    assert!(merged.contains('\t'));
+}

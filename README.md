@@ -75,6 +75,7 @@ Highlights:
 - `docling.pipeline.*` sets docling flags (OCR, force_backend_text, images_scale, thread/batch sizes).
 - `docling.ocr.*` selects engine and OCR behavior.
   - For `tesseract`/`tesseract_cli`, use Tesseract language codes such as `eng`.
+- `postprocess.control_chars_to_sanitize` controls which ASCII control-byte codes are removed from transcript output (defaults include all control codes).
 - `paths.docling_artifacts_dir` controls where Docling looks for model artifacts. If empty, `DOCLING_ARTIFACTS_PATH` is not set and Docling resolves models through `HF_HOME`/its Hugging Face cache behavior.
 - `postprocess.*` cleans repeated headers/footers and regex-matched lines.
 - `output.*` controls what artifacts are written.
